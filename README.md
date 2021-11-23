@@ -289,7 +289,146 @@ contract TweetStorage {
 //12
 Write a test in javascript as na unit test would result in error since one cannot pass strings from one contract to another in solidity.
 
+//13
+Our Solidity tests and JavaScript tests are completely separate! Just because we've created the tweet in our Solidity test, does not mean we can retrieve it in our JavaScript test – each test in Truffle uses a clean room environment so that they don't accidentally share state with each other (which is a good thing)!
+
+```javascript
+const TweetStorage = artifacts.require('TweetStorage')
+
+contract('tweets', () =>{
+
+    it("can get tweet", async () => {
+        // 13  each test in Truffle uses a clean room environment to avoid state sharing
+        before(async() => {
+            const tweetStorage = await TweetStorage.deployed()
+            await tweetStorage.createTweet(1, "Hello world!")
+        })
+        //
+
+        const storage = await TweetStorage.deployed()
+
+        const tweet = await storage.tweets.call(1) //get the data
+        const { id, text, userId} = tweet // Destructure the data
+
+        // Check if the different parts contain the expected values
+        assert.equal(parseInt(id), 1)
+        assert.equal(text, "Hello world!")
+        assert.equal(parseInt(userId), 1)
+
+        //web3 users `bigNumber` to  support Ethereum's standard 
+        //numeric data type (which is much larger than the one built into JavaScript).
+        //because the numbers in this test are small we can use `parseInt()`
+    })
+})
+```
+## Inheritance and modifiers
+
+At this point in, our current TweetStorage contract, anyone can create a tweet on behalf of any user simply by passing their user ID as a parameter.
+
+```javascript
+// contracts/tweets/TweetStorage.sol
+function createTweet(uint _userId, string memory _text) public returns(uint) {
+  latestTweetId++;
+
+  tweets[latestTweetId] = Tweet(latestTweetId, _text, _userId, now);
+
+  return latestTweetId;
+}
+```
+We also don't do any checks in our createUser function to see if the username is taken:
+
+```javascript
+// contracts/users/UserStorage.sol
+function createUser(bytes32 _username) public returns(uint) {
+  latestUserId++;  
+
+  profiles[latestUserId] = Profile(latestUserId, _username);
+
+  return latestUserId;
+}
+```
+
+ It is risky to add too much logic in our storage contracts, since they cannot be updated after being deployed without also clearing all their stored data. Therefore, we want to keep them as simple as possible, and instead let upgradable controller contracts handle the bulk of the logic.
+
+ ![image info](./images/contracts_structure.png)
+
+ ## Working with permissions
+ Add  `TweetController.sol` to the `tweets` folder, and `UserController.sol` to the `users`folder.
+
+ Solidity has a special variable that's accessible in all contract functions, called msg.sender. It represents the Ethereum address that's calling the contract. So for the createUser function in UserStorage, we should simply make sure that msg.sender is equal to the address that UserController is deployed to!
+
+  ![image info](./images/create_user.png)
+
+  We can use Solidity's require function to make sure that a condition is met before proceeding to the next line of code. It the requirement fails, it will throw an error:
+
+```javascript
+  // SPDX-License-Identifier: GPL-3.0
+pragma solidity ^0.8.7;
+
+contract UserStorage {
+    //4 add public
+    mapping(uint256 => Profile) public profiles;
+    //
+
+    struct Profile {
+        uint256 id;
+        bytes32 username;
+    }
+
+    uint256 latestUserId = 0;
+    
+    //14 
+    address ownerAddr;
+    address controllerAddr;
+
+    function setControllerAddr(address _controllerAddr) public {
+        require(msg.sender == ownerAddr);
+        controllerAddr = _controllerAddr;
+    }
+    //
 
 
+    function createUser(bytes32 _username) public returns (uint256) {
+        // 14
+        require(msg.sender == controllerAddr);
+        //
+
+        latestUserId++;
+
+        profiles[latestUserId] = Profile(latestUserId, _username);
+
+        return latestUserId;
+    }
+
+    //5 By adding the keyword public in front of the profiles state variable,
+    // solidity will generate a getter and we can skip the getUserFromId function
+
+    // function getUserFromId(uint256 _userId)
+    //     public
+    //     view
+    //     returns (uint256, bytes32)
+    // {
+    //     return (profiles[_userId].id, profiles[_userId].username);
+    // }
+}
+```
+ As you can see, this is getting pretty complicated, and we're introducing state variables like ownerAddr and controllerAddr which don't really have anything to do with our users. To make all this a little less complex, let's extract this new logic into some Solidity helper libraries instead!
 
 
+## Helper libraries and Inheritance
+Solidity makes it possible for contracts to inherit properties from other contracts, which is useful if:
+
+*  you want to extract some of the logic into another file;
+*  you have logic that should be duplicated across contracts.
+
+In our UserStorage contract above, we have two features that could be inherited from a more general contract library:
+
+1. Setting the owner of the contract, and making sure that some functions are limited to its address (ownerAddr)
+
+2. Setting the controller of the contract, and making sure that some functions are limited to its address (controllerAddr)
+
+Create a `helpers` folder inside the `contracts` folder and create `BaseStorage.sol` and `Owned.sol`inside `helpers`.
+
+The idea is that our `UserStorage` inherits from `BaseStorage` (which sets the controllerAddr for the storage contract), and `BaseStorage` itself inherits from `Owned` (which sets the `ownerAddr` for the storage contract).
+
+ ![image info](./images/owned_storage.png)

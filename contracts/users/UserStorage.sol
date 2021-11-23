@@ -12,7 +12,22 @@ contract UserStorage {
 
     uint256 latestUserId = 0;
 
+    //14
+    address ownerAddr;
+    address controllerAddr;
+
+    function setControllerAddr(address _controllerAddr) public {
+        require(msg.sender == ownerAddr);
+        controllerAddr = _controllerAddr;
+    }
+
+    //
+
     function createUser(bytes32 _username) public returns (uint256) {
+        // 14
+        require(msg.sender == controllerAddr);
+        //
+
         latestUserId++;
 
         profiles[latestUserId] = Profile(latestUserId, _username);
