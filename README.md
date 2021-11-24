@@ -152,7 +152,7 @@ contract TestUserStorage {
         uint256 _expectedId = 1;
 
         Assert.equal(
-            _storage.createUser("tristan"),
+            _storage.createUser("romeu"),
             _expectedId,
             "Should create user with ID 1"
         );
@@ -211,7 +211,7 @@ contract('users', () => {
     // Get the second element (the username)
     const username = userInfo[1]
 
-    assert.equal(username, "tristan")
+    assert.equal(username, "romeu")
   });
 })
 ```
@@ -619,7 +619,7 @@ contract('users', () => {
     const storage = await UserStorage.deployed()
 
     try {
-      const username = web3.utils.fromAscii("tristan")
+      const username = web3.utils.fromAscii("romeu")
       await storage.createUser(username)
       assert.fail()
     } catch (err) {
@@ -805,7 +805,7 @@ contract TestUserStorage {
   function testCreateFirstUser() public {
     uint _expectedId = 1;
 
-    Assert.equal(userStorage.createUser("tristan"), _expectedId, "Should create user with ID 1");
+    Assert.equal(userStorage.createUser("romeu"), _expectedId, "Should create user with ID 1");
   }
 
 }
@@ -841,4 +841,17 @@ contract UserController is BaseController {
 }
 ```
 Do the exact same thing with `TweetController`and the `createTweet` function, and add "create tweet controller" to the tests.
-//
+
+## Using Metamask
+
+When it comes to building a web app, there are many options. The only requirement is that you need a library like web3.js which can connect your web app to the Ethereum blockchain.
+
+## Next.js
+
+## Install Metamask
+There are 3 test networks (Ropsten, Kovan and Rinkeby), which use a shared blockchain that everyone can connect to, but where the network is deliberately slow and ether is practically free.
+
+We also have our local network (localhost:8545), which we initiated when we ran the ganache-cli command, and only exists on our computer. This is the one that we want to connect to for now!
+
+Let's create a file called provider.js in a new web3 folder.
+
