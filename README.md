@@ -1,16 +1,14 @@
 # Vulture Dapp
+The concept is very simple: anyone can sign up using their Ethereum wallet. Once they are logged in, they can post tweets that are stored forever on the immutable blockchain. You should also be able to view other profiles and their tweets.
 
-## What is Ethereum
+The credit for the concept, most of the explanation and contract code goes entirely to Tristan Edwards, whose blog heavily serves as base for the project presented in this repository.
 
-## Dapps and smart contracts
-### The ether currency
-### Gas
-### How Ether relates to gas
+Source:
+https://www.ludu.co/course/ethereum - "Discover Ethereum & Solidity"
 
-## Hello Solidity
-### Using Remix
-Writing the contract in solidity.
-
+## Tutorial
+Bellow you have a blog post style tutorial to build the Dapp from scratch, following the steps implemented in this youtube video:
+(insert link)
 
 ## Running locally
 
@@ -81,7 +79,7 @@ contract UserStorage {
   }
 }
 ```
-Write a deploy script so that the `UserStorage`can be interacted with.
+Write a deploy script so that the `UserStorage` can be interacted with.
 
 ```javascript
 const UserStorage = artifacts.require('UserStorage');
@@ -172,7 +170,7 @@ Some things to note here:
 While it can be tempting to write all tests in JavaScript, there are sometimes limitations to what you can check when going through a virtual machine. Therefore, a good mix of JavaScript tests and Solidity tests is usually key to write secure DApps.
 
 If, like me, you are using windows and vscode you might get an import error:
-![image info](./images/win_solidity_import_error.png)
+![image info](./images/win_solidity_import_error.PNG)
 If this happens use `truffle develop` to run the tests.
 
 
@@ -286,10 +284,10 @@ contract TweetStorage {
 ```
 
 ### Getting the Tweet data 
-//12
+<mark>**12**</mark>
 Write a test in javascript as na unit test would result in error since one cannot pass strings from one contract to another in solidity.
 
-//13
+<mark>**13**</mark>
 Our Solidity tests and JavaScript tests are completely separate! Just because we've created the tweet in our Solidity test, does not mean we can retrieve it in our JavaScript test – each test in Truffle uses a clean room environment so that they don't accidentally share state with each other (which is a good thing)!
 
 ```javascript
@@ -360,6 +358,8 @@ function createUser(bytes32 _username) public returns(uint) {
   ![image info](./images/create_user.png)
 
   We can use Solidity's require function to make sure that a condition is met before proceeding to the next line of code. It the requirement fails, it will throw an error:
+
+<mark>**14**</mark>
 
 ```javascript
   // SPDX-License-Identifier: GPL-3.0
@@ -432,3 +432,413 @@ Create a `helpers` folder inside the `contracts` folder and create `BaseStorage.
 The idea is that our `UserStorage` inherits from `BaseStorage` (which sets the controllerAddr for the storage contract), and `BaseStorage` itself inherits from `Owned` (which sets the `ownerAddr` for the storage contract).
 
  ![image info](./images/owned_storage.png)
+
+ <mark>**15**</mark>  import BaseStorage.sol and add `is` keyword.
+
+ ```javascript
+//...
+import '../helpers/BaseStorage.sol';
+contract UserStorage is BaseStorage {
+  // ...
+}
+ ```
+
+ Note that we don't have to deploy BaseStorage separately from UserStorage when it's used as a library. Instead, UserStorage will simply copy all the logic that it needs from BaseStorage at compilation time.
+
+ Remove `controllerAdd` and `setControllerAddr` from the `UserStorage` contract, since we're inheriting them instead.
+
+  ![image info](./images/baseStorage_userStorage.png)
+
+  Next, we want BaseStorage to inherit from Owned, since it's expecting to find an ownerAddr state .
+
+```javascript
+//contracts/helpers/Owned.sol
+contract Owned {
+  address public ownerAddr;
+
+  constructor() public {
+    ownerAddr = msg.sender;
+  }
+
+  function transferOwnership(address _newOwner) public {
+    // Only the current owner can set a new ownerAddr:
+    require(msg.sender === ownerAddr);
+    
+    // The new address cannot be null:
+    require(_newOwner != address(0));
+
+    ownerAddr = _newOwner;
+  }
+}
+```
+Notice how we have a special `constructor` function inside the `Owned` contract? This function runs only once, when the contract is deployed, and then never again.
+
+By getting the `msg.sender` inside the constructor, we are getting the address that's deploying the contract for the very first time. This is a very common way of setting the initial `ownerAddr` securely.
+
+We've also added a `transferOwnership` function just in case we need to change the owner at some point in the future. As you can see, we've added some `require` functions to make sure that only the owner can call this function, and that the new address isn't empty (`address(0)` is the same as the empty address `0x0`).
+
+<mark>**16**</mark>  Now make sure that `BaseStorage` inherits from `Owned`.
+
+```javascript
+pragma solidity ^0.8.7;
+
+import './Owned.sol';
+
+contract BaseStorage is Owned {
+}
+```
+<mark>**17**</mark> 
+With this we have made it possible for UserStorage to access all the state variables needed for checking permissions (ownerAddr and controllerAddr) without polluting the contract code with irrelevant functions.
+
+ ![image info](./images/owned_base_user.png)
+
+ ## Using modifiers
+ There's one last improvement that we could use in our contracts before we move on to making our tests pass. To avoid having a lot of logic involving checking who the `msg.sender` is (by repeating the following line)
+
+ ```javascript
+ require(msg.sender == ownerAddr)
+ ```
+  we can use modifiers.
+  Modifiers are used to "wrap" some additional functionality around a function, and are similar to decorators in object-oriented programming.
+
+  <mark>**18**</mark>  Add a modifier in `Owned.sol`
+  ```javascript
+  contract Owned {
+  // ...
+  modifier onlyOwner() {
+    require(msg.sender == ownerAddr);
+    _;
+  }
+  // ...
+}
+  ```
+Now let's add the modifier where  `require(msg.sender == ownerAddr)` is used trough out our contract.
+
+<mark>**19**</mark> 
+ Also add an `onlyController` modifier in `BaseStorage` to substitute the use of `require(msg.sender == controllerAddr)`;
+
+## Duplicating the logic to TweetStorage
+<mark>**20**</mark> 
+Inside `TweetStorage.sol`, add the `onlyController` modifier to the `createTweet` (and inherit from `BaseStorage`.
+
+```javascript
+// contracts/tweets/TweetStorage.sol
+
+// Import the BaseStorage contract
+import '../helpers/BaseStorage.sol';
+
+// Make sure TweetStorage inherits from it
+contract TweetStorage is BaseStorage {
+  // ...
+  
+  // Add the "onlyController" modifier:
+  function createTweet(uint _userId, string _text) public onlyController returns(uint _newTweetId) {
+    // ...
+  }
+}
+```
+Now we have to rewrite the tests to fit the new contract structure.
+
+## The deployment orchestra
+To make our storage and controller contracts work together, we need to deploy them in a very specific order, because of the use of the `onlyController` modifier in some functions of the storage contracts. 
+They need to be aware of what address their respective controllers have been uploaded to.
+Based on the code, here's what we should do:
+1. Deploy the `UserStorage` and `TweetStorage` contracts (as we do now)
+2. Deploy the `UserController` and `TweetController` contracts
+3. Get the deployed instances of `UserStorage` and `TweetStorage` (so that we can interact with them in our migration files)
+4. Set the `controllerAddr` in the deployed `UserStorage` and `TweetStorage` contracts
+
+<mark>**21**</mark> 
+The first one is already done, so we'll start by creating a new migration file where we deploy our `UserController` and `TweetController` contracts. We can call it `3_deploy_controllers.js`.
+
+By using an array inside the deployer.deploy function, we get a resolved promise once they're both done:
+
+<mark>**22**</mark> 
+After that, we want to get the deployed versions of our storage contracts. We can do this by calling the .deployed() method on the contracts.
+
+<mark>**23**</mark> 
+Finally, we call the `setControllerAddr` function on the two storage contracts instances. In order to get the deployed addresses for `UserStorage` and `TweetStorage`, we simply type `UserStorage.address` and `TweetStorage.address`. The address property becomes available on the contract object ***after*** it's been deployed.
+
+```javascript
+//migrations/3_deploy_controllers.js
+
+//21
+const UserController = artifacts.require('UserController')
+const TweetController = artifacts.require('TweetController')
+
+module.exports = (deployer) => {
+
+  // Deploy controllers contracts:
+  deployer.then(async () => {
+    await deployer.deploy(UserController);
+    await deployer.deploy(TweetController);
+  })
+}
+
+//22
+// Since we want to get the storage contract instances,
+// we need to import them!
+const UserStorage = artifacts.require('UserStorage');
+const TweetStorage = artifacts.require('TweetStorage');
+
+module.exports = (deployer) => {
+
+  deployer.then(async () => {
+    await deployer.deploy(UserController);
+    await deployer.deploy(TweetController);
+  })
+  // Get the deployed storage contract instances:
+  .then(() => {
+    return Promise.all([
+      UserStorage.deployed(),
+      TweetStorage.deployed(),
+    ]);
+  })
+//23 set the controller address on both storage contracts:
+.then(storageContracts => {
+    const [userStorage, tweetStorage] = storageContracts;
+
+    return Promise.all([
+      userStorage.setControllerAddr(UserController.address),
+      tweetStorage.setControllerAddr(TweetController.address),
+    ]);
+  })
+}
+```
+
+## Handling errors in tests
+If a user tries to call createUser or createTweet by calling the storage contract directly for example, we should expect an error, since they're not going through the controller like we want them to.
+
+<mark>**24**</mark> 
+To test this behavior, let's create a new test at the very top of `test/integration/users.js` called "can't create user without controller". 
+
+```javascript
+// test/integration/users.js
+contract('users', () => {
+  it("can't create user without controller", async () => {
+    const storage = await UserStorage.deployed()
+
+    try {
+      const username = web3.utils.fromAscii("tristan")
+      await storage.createUser(username)
+      assert.fail()
+    } catch (err) {
+      console.log(err);
+    }
+  })
+  // ...
+})
+```
+<mark>**25**</mark> 
+We will get an error containing the string `"VM Exception"`. Let´s create a function in a new `utils.js`file inside the test folder to handle that. Make the change inside the `users.js`and <mark>**26**</mark>  `tweet.js`files. 
+
+## Adding a contract manager
+
+Since our controllers are supposed to call functions in our storage contracts, they obviously need to know what address these storage contracts are deployed to.
+
+<mark>**26**</mark> To make this work, we'll build a ContractManager that keeps track of all contracts' addresses.
+
+
+ ![image info](./images/user_controller.png)
+The functions needed in the contract manager are the following:
+1. Add new key-value records, with a string (ex: "UserStorage") pointing to an address (ex: "0xde0b295669a9fd93d5")
+2. Get an address based on the string key.
+3. Delete the address of a string key.
+4. All these functions should obviously only be available to the owner of the contract, so we'll first of all make our contract inherit from Owned.
+
+```javascript
+//contracts/ContractManager.sol
+pragma solidity ^0.8.7;
+
+import './helpers/Owned.sol';
+
+contract ContractManager is Owned {
+  mapping (string => address) addresses;
+
+  function setAddress(string memory _name, address _address) public {
+    addresses[_name] = _address;
+  }
+
+  function getAddress(string memory _name) public view returns (address) {
+    return addresses[_name];
+  }
+
+  function deleteAddress(string memory _name) public {
+    addresses[_name] = address(0);
+  }
+}
+```
+
+## Rethinking our deployment strategy
+Immutability is an important aspect of the Ethereum ecosystem, so it's essential to plan ahead when writing Solidity contracts. This goes for migration files too.
+
+In Truffle, we ideally want to separate the migration files so that we can run just one of them in isolation if some aspect of the code changes.
+
+Some migration files, such as 2_deploy_storage.js will never be run more than once (since that would reset its stored data). 
+
+When it comes to the controllers however, the best case scenario would be if when we update, say, our UserController, we could run just a single migration file which takes care of replacing our contract, set the new controller address in the storage and updating the contract manager – all in one sweep.
+
+<mark>**27**</mark> 
+You can safely delete the 3_deploy_controllers.js file (below)
+
+```javascript
+//3_deploy_controllers.js
+const UserController = artifacts.require('UserController')
+const TweetController = artifacts.require('TweetController')
+
+module.exports = (deployer) => {
+
+  deployer.then(async () => {
+    await deployer.deploy(UserController);
+    await deployer.deploy(TweetController);
+  })
+}
+
+// we need to import them!
+const UserStorage = artifacts.require('UserStorage');
+const TweetStorage = artifacts.require('TweetStorage');
+
+module.exports = (deployer) => {
+
+  deployer.then(async () => {
+    await deployer.deploy(UserController);
+    await deployer.deploy(TweetController);
+  })
+  // Get the deployed storage contract instances:
+  .then(() => {
+    return Promise.all([
+      UserStorage.deployed(),
+      TweetStorage.deployed(),
+    ]);
+  })
+//set the controller address on both storage contracts:
+.then(storageContracts => {
+    const [userStorage, tweetStorage] = storageContracts;
+
+    return Promise.all([
+      userStorage.setControllerAddr(UserController.address),
+      tweetStorage.setControllerAddr(TweetController.address),
+    ]);
+  })
+}
+```
+so that we can instead create one called 3_deploy_manager.js. Similarly to 2_deploy_storage.js, this one should only have to be deployed once.
+
+```javascript
+//migrations/3_deploy_manager.js
+const ContractManager = artifacts.require('ContractManager')
+const UserStorage = artifacts.require('UserStorage');
+const TweetStorage = artifacts.require('TweetStorage');
+
+module.exports = (deployer) => {
+  
+  deployer.deploy(ContractManager)
+  .then(() => {
+    return ContractManager.deployed()
+  })
+  .then(manager => {
+    return Promise.all([
+      manager.setAddress("UserStorage", UserStorage.address),
+      manager.setAddress("TweetStorage", TweetStorage.address),
+    ])
+  })
+}
+```
+<mark>**28**</mark> 
+
+Next, create two deployment files for our controllers – one for the `UserController` and one for the `TweetController`.
+
+In these migrations, we need to make sure that our controllers have the address of the deployed ContractManager. If they have that address, then they can get the address of every other deployed contract too.
+
+For this, we'll first create a library called BaseController that our UserController and TweetController will inherit from:
+
+```javascript
+//contracts/helpers/BaseController.sol
+pragma solidity ^0.8.7;
+
+import './Owned.sol';
+
+contract BaseController is Owned {
+   // The Contract Manager's address
+  address managerAddr;
+  function setManagerAddr(address _managerAddr) public onlyOwner {
+    managerAddr = _managerAddr; 
+  }
+}
+```
+
+<mark>**29**</mark> As you can see, all BaseController does is set the managerAddr state variable using the setManagerAddr function. Now we just need to make sure that TweetController and UserController inherit from it.
+
+<mark>**30**</mark> We're ready to write our two migration files!
+
+(`migrations/4_deploy_usercontroller.js`, `migrations/5_deploy_tweetcontroller.js`)
+ These should:
+
+1. Deploy their dedicated controller contract
+2. Set the ContractManager's address in the controller
+3. Set the controller's address in the ContractManager
+4. Set the controller's address in the storage contract that goes with it
+
+Run 'truffle test' or 'test' once more to make sure that the contracts are being deployed as expected.
+
+## Updating our unit test
+Remember, our unit tests run our contracts in isolation, so there's no interaction between our controller contracts and storage contracts. In other words, we can't make our controller contract call a function on the deployed storage contract in a unit test.
+
+<mark>**31**</mark> 
+We then need to crate a brand new instance of `UserStorage` inside the test's constructor, and manually call `setControllerAddr` on it.
+
+```javascript
+
+pragma solidity ^0.8.7;
+//test/unit/TestUserStorage.sol
+import "truffle/Assert.sol";
+import "../../contracts/users/UserStorage.sol";
+
+contract TestUserStorage {
+  UserStorage userStorage;
+
+  constructor() public {
+    userStorage = new UserStorage();
+    userStorage.setControllerAddr(address(this));
+  }
+
+  function testCreateFirstUser() public {
+    uint _expectedId = 1;
+
+    Assert.equal(userStorage.createUser("tristan"), _expectedId, "Should create user with ID 1");
+  }
+
+}
+```
+Do the same exact thing for `TestTweetStorage`, but this time with `TweetStorage`.
+
+## Building the controllers
+To round this up, we need to actually make our controllers work by adding some functions to them that will forward data to their respective storage contracts. We'll start with the user controller.
+
+<mark>**32**</mark> 
+First of all, we'll go to the users' integration test file, remove the test called "can create user" and replace it with one called "can create user with controller".
+Now create the `createUser` function in the `UserController`.
+The function will fetch the deployed UserStorage instance through the ContractManager, and send its arguments to that instance's own createUser function:
+
+```javascript
+//contracts/users/UserController.sol
+pragma solidity ^0.8.7;
+
+import '../helpers/BaseController.sol';
+import '../ContractManager.sol';
+import './UserStorage.sol';
+
+contract UserController is BaseController {
+
+  function createUser(bytes32 _username) public returns(uint) {
+    ContractManager _manager = ContractManager(managerAddr);
+
+    address _userStorageAddr = _manager.getAddress("UserStorage");
+    UserStorage _userStorage = UserStorage(_userStorageAddr); 
+
+    return _userStorage.createUser(_username);
+  }
+}
+```
+Do the exact same thing with `TweetController`and the `createTweet` function, and add "create tweet controller" to the tests.
+//
