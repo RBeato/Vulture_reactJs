@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.7;
 
-contract UserStorage {
+//15 import BaseStorage.sol and add `is`keyword.
+import "../helpers/BaseStorage.sol";
+
+contract UserStorage is BaseStorage {
     //4 add public
     mapping(uint256 => Profile) public profiles;
 
@@ -12,21 +15,27 @@ contract UserStorage {
 
     uint256 latestUserId = 0;
 
-    //14
-    address ownerAddr;
-    address controllerAddr;
+    // 16 Remove this because it is in BaseStorage.sol
+    // //14
+    // address ownerAddr;
+    // address controllerAddr;
 
-    function setControllerAddr(address _controllerAddr) public {
-        require(msg.sender == ownerAddr);
-        controllerAddr = _controllerAddr;
-    }
+    // function setControllerAddr(address _controllerAddr) public {
+    //     require(msg.sender == ownerAddr);
+    //     controllerAddr = _controllerAddr;
+    // }
 
-    //
+    // //
 
-    function createUser(bytes32 _username) public returns (uint256) {
-        // 14
-        require(msg.sender == controllerAddr);
-        //
+    function createUser(bytes32 _username)
+        public
+        onlyController
+        returns (uint256)
+    {
+        //19 add modifier and comment code below
+        // // 14
+        // require(msg.sender == controllerAddr);
+        // //
 
         latestUserId++;
 

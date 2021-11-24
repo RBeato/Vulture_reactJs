@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity ^0.8.7;
 
+//20 Import the BaseStorage contract
+import "../helpers/BaseStorage.sol";
+
 //7
-contract TweetStorage {
+contract TweetStorage is BaseStorage {
+    //20 inherit BaseStorage
+
     //11
     mapping(uint256 => Tweet) public tweets;
 
@@ -17,7 +22,11 @@ contract TweetStorage {
 
     function createTweet(uint256 _userId, string memory _text)
         public
-        returns (uint256)
+        onlyController
+        returns (
+            //20 add the modifier
+            uint256
+        )
     {
         latestTweetId++;
 
